@@ -1,0 +1,261 @@
+---
+title: "Exercise 1"
+output: pdf_document
+---
+### Question 1
+In order to compare results with the data guru, it is essential to reorganize the data in a sensible fashion.  To accomplish this, we first reorganize the size of the propoerties into 4 sizes: small, medium, large, and gigantic.  Next, we sort the contract types between gross and net.  Finally, we cut the data into 10 year intervals.  These factors were all chosen due to their suspected effects on rent: larger properties may cost more, individuals with net contracts (pay their own utilities) likely pay more, and the building age may alter rental fees.  After these steps, we are ready to proceed with analysis.
+
+```{r include=FALSE}
+#Question 1 
+
+# library initialization
+library(tidyverse)
+data <- read.csv("~/Downloads/greenbuildings.csv")
+#tidying the data, classify the size of property into 4 categories
+data$size_class <- ifelse (data$size <= 50891, "small" , ifelse
+                           (data$size <= 128838, "medium", ifelse
+                             (data$size <= 294212, "large", "gigantic")))
+#seperate the data based on contract type
+data$payment <- ifelse(data$net == 0 , "gross contract" , "net contract")
+#seperate the data based on green building type
+data$green_type <- ifelse (data$green_rating == 0, 'Non-green' , 'Green')
+#cut building's age to 10 year interval
+data$trend <- cut(data$age, breaks = c(0 , 10, 20 , 30, 40, 50, 60 , 70 ))
+```
+
+```{r echo=FALSE}
+#Median rental rate based on size and payment type
+ggplot (data, aes(size_class, Rent)) + 
+  geom_boxplot( aes(colour = green_type) ) +
+  scale_color_manual(values = c( "blue" ,  "orange") ) +
+  facet_wrap(~ payment) +
+  labs ( title = "Rent based on size and contract type", x="Size", color="Building Type") + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.6))
+```
+
+In this figure, we observe that gross contracts tend to have higher rents.  Generally speaking, this makes the data guru's estimation of the difference between green and non-green rents dubious, as they have not factored in this informaiton.
+
+```{r echo=FALSE}
+ggplot(data , aes(trend , Rent)) + geom_boxplot(aes( color = factor(trend) )) + 
+  labs(title = "Rent according to building age",
+       y = "Rent",
+       x = "Building Age") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.6))+
+  theme(legend.position = "none")
+
+```
+
+In the second figure, it is clearly established that rent is not constant throughout a buildings lifespan, casting doubt on the guru's estimation for profit margins.  In fact, it appears that the median rental cost decreases for the majority of years, with an abberation in 60-70 year old buildings.
+
+In conclusion, it is hard to fully trust the data guru's analysis.  His assumptions of differing contract's yielding similar rents and constant rent over time are clearly misguided.  In order to improve the analysis, steps must be committed that normalize median rents over the course of contract type, time, and many other factors.
+
+### Question 2
+
+In order to figure out which time of year is the best for traveling, I organized the data by month and create a bar chart.
+
+
+```{r include=FALSE}
+#load library 
+library(tidyverse)
+
+####    Data and summary of how it looks like     ####
+airport <- read.csv('~/Downloads/ABIA.csv')
+
+#calculate mean for month
+arr_delay = airport %>%
+  group_by(Month) %>%
+  summarize(ArrDelay.mean = mean(as.numeric(ArrDelay),na.rm=TRUE))
+```
+
+```{r echo=FALSE}
+ggplot(arr_delay , aes (x = factor(Month) , y = ArrDelay.mean) ) +
+  geom_bar(stat = 'identity', fill="red")+
+  labs(title= "Average delay per month", x= "Month", y="Average Arrival Delay")
+```
+
+In conclusion, it seems fall is the best time because of less carrier and weather delays.  This makes sense, as there are not many vacation and fall and weather is moderate.
+
+###Question 3
+
+First, we will focus on 350 AMG.
+```{r include=FALSE}
+library (mosaic)
+library(FNN)
+
+#load data file
+sclass <- read.csv('~/Downloads/sclass.csv')
+
+# Focus on 2 trim levels: 350 and 65 AMG
+sclass350 = subset(sclass, trim == '350')
+dim(sclass350)
+
+sclass65AMG = subset(sclass, trim == '65 AMG')
+summary(sclass65AMG)
+nrow(sclass350)
+##                      ###
+# First part for trim 350 #
+####                     ##
+
+#Training model for 350 trim
+#First split the data into training and testing set
+N = nrow(sclass350)
+N_train = floor(N*.8)
+N_test = N - N_train
+
+#####
+# Train/test split
+#####
+
+# randomly sample a set of data points to include in the training set
+train_ind = sample.int(N, N_train, replace=FALSE)
+
+# Define the training and testing set
+D_train = sclass350[train_ind,]
+D_test = sclass350[-train_ind,]
+
+# optional book-keeping step:
+# reorder the rows of the testing set by the mileage variable
+# this isn't necessary, but it will allow us to make a pretty plot later
+D_test = arrange(D_test, mileage)
+head(D_test)
+
+# Now separate the training and testing sets into features (X) = mileage and outcome (y) = price
+X_train = select(D_train, mileage)
+y_train = select(D_train, price)
+X_test = select(D_test, mileage)
+y_test = select(D_test, price)
+
+#create a vector to store RMSE for each k 
+k_rmse <- rep (0, N_test - 2)
+
+# define a helper function for calculating RMSE
+rmse = function(y, ypred) {
+  sqrt((sum((y - ypred)^2 ))/N_test)
+}
+
+#Unable to run k = 2 
+#knn_temp = knn.reg(train = X_train, test = X_test, y = y_train, k=2)
+
+#run a for loop with different value for k
+for ( i in 1: (N_test - 2 ) ){
+  number =  2 + i
+  #print(paste(number))
+  knn_temp = knn.reg(train = X_train, test = X_test, y = y_train, k = number)
+  #names(knn_temp)
+  ypred_knn_temp = knn_temp$pred
+  k_rmse[i] <- rmse(y_test, ypred_knn_temp)
+}
+
+#Find optimal k 
+optimal_k = which.min(k_rmse)
+optimal_k
+```
+
+Here, we have generated the optimal K value.
+```{r echo=FALSE}
+#Find optimal k 
+optimal_k = which.min(k_rmse)
+optimal_k
+#Plot the RMSE for different k
+plot (k_rmse)
+```
+
+
+This graph displays the RMSE associated with each K-Value.
+
+```{r include=FALSE}
+knn_optimal = knn.reg(train = X_train, test = X_test, y = y_train , k = optimal_k + 2)
+
+ypred_knn_optimal = knn_optimal$pred
+ypred_knn_optimal
+D_test$ypred_knn_optimal = ypred_knn_optimal
+
+
+```
+
+```{r echo=FALSE}
+#plot to compare models
+p_test = ggplot(data = D_test) + 
+  geom_point(mapping = aes(x = mileage, y = price), color='lightgrey') 
+
+p_test + geom_path(aes(x = mileage, y = ypred_knn_optimal), color='red')
+```
+
+This graph displays the pattern between price and mileage at the optimal K.
+
+We will now do the same thing for 65 AMG.
+```{r include=FALSE}
+N = nrow(sclass65AMG)
+N_train = floor(N*.8)
+N_test = N - N_train
+```
+
+```{r include=FALSE}
+train_ind = sample.int(N, N_train, replace=FALSE)
+
+# Define the training and testing set
+D_train = sclass65AMG[train_ind,]
+D_test = sclass65AMG[-train_ind,]
+
+# optional book-keeping step:
+# reorder the rows of the testing set by the mileage variable
+# this isn't necessary, but it will allow us to make a pretty plot later
+D_test = arrange(D_test, mileage)
+```
+
+```{r include=FALSE}
+X_train = select(D_train, mileage)
+y_train = select(D_train, price)
+X_test = select(D_test, mileage)
+y_test = select(D_test, price)
+
+#create a vector to store RMSE for each k 
+k_rmse <- rep (0, N_test - 2)
+
+# define a helper function for calculating RMSE
+rmse = function(y, ypred) {
+  sqrt((sum((y - ypred)^2 ))/N_test)
+}
+```
+
+
+```{r include=FALSE}
+number = 0
+#run a for loop with different value for k
+for ( i in 1: (N_test - 2 ) ){
+  number =  2 + i
+  #print(paste(number))
+  knn_temp = knn.reg(train = X_train, test = X_test, y = y_train, k = number)
+  #names(knn_temp)
+  ypred_knn_temp = knn_temp$pred
+  k_rmse[i] <- rmse(y_test, ypred_knn_temp)
+}
+
+```
+
+```{r echo=FALSE}
+#Find optimal k 
+optimal_k = which.min(k_rmse)
+optimal_k
+plot (k_rmse)
+```
+
+Again, we have generated an optimal K Value as well as the pattern between RMSE and K Values.
+```{r include=FALSE}
+knn_optimal = knn.reg(train = X_train, test = X_test, y = y_train , k = optimal_k + 2)
+
+ypred_knn_optimal = knn_optimal$pred
+ypred_knn_optimal
+D_test$ypred_knn_optimal = ypred_knn_optimal
+```
+
+```{r echo=FALSE}
+p_test = ggplot(data = D_test) + 
+  geom_point(mapping = aes(x = mileage, y = price), color='lightgrey') 
+
+p_test + geom_path(aes(x = mileage, y = ypred_knn_optimal), color='red')
+```
+
+Pattern between price and mileage for 65 AMG.
+
+In this instance, the optimal K value for 65 AMG was greater than 350 AMG.  Since there is more observations for 65 AMG, this does make sense.  We can use a bigger K and not be hurt by variance in bigger data sets.  In general, the K value is subject to change in any given trial, so this will not always be the case.
